@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: transparent;
+    overflow: visible;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+
+  .pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 12px 24px;
+    border-radius: 28px;
+    background: rgba(30, 30, 30, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .pill.transcribing {
+    animation: pulse 0.8s ease-in-out infinite;
+    background: rgba(60, 60, 60, 0.9);
+  }
+
+  .bar {
+    width: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.9);
+    animation: wave 1s ease-in-out infinite;
+  }
+
+  .pill.transcribing .bar {
+    animation: shrink 0.3s ease-out forwards;
+    opacity: 0.6;
+  }
+
+  @keyframes shrink {
+    to { transform: scaleY(0.2); }
+  }
+
+  .bar:nth-child(1)  { height: 8px;  animation-delay: -0.9s; }
+  .bar:nth-child(2)  { height: 14px; animation-delay: -0.8s; }
+  .bar:nth-child(3)  { height: 20px; animation-delay: -0.7s; }
+  .bar:nth-child(4)  { height: 26px; animation-delay: -0.6s; }
+  .bar:nth-child(5)  { height: 30px; animation-delay: -0.5s; }
+  .bar:nth-child(6)  { height: 34px; animation-delay: -0.4s; }
+  .bar:nth-child(7)  { height: 30px; animation-delay: -0.3s; }
+  .bar:nth-child(8)  { height: 26px; animation-delay: -0.2s; }
+  .bar:nth-child(9)  { height: 20px; animation-delay: -0.1s; }
+  .bar:nth-child(10) { height: 14px; animation-delay: -0.05s; }
+  .bar:nth-child(11) { height: 8px;  animation-delay: 0s; }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.3); }
+    50%      { transform: scaleY(1); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+  }
+</style>
+</head>
+<body>
+  <div class="pill" id="pill">
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+    <div class="bar"></div>
+  </div>
+  <script>
+    function setMode(mode) {
+      var pill = document.getElementById('pill');
+      pill.className = 'pill' + (mode === 'transcribing' ? ' transcribing' : '');
+    }
+  </script>
+</body>
+</html>
