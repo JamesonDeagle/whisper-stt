@@ -25,10 +25,11 @@ MODELS = {
     "large": "mlx-community/whisper-large-v3-mlx",
 }
 
-DEFAULT_MODEL = "turbo"
 SAMPLE_RATE = 16000
 PORT = 19876
 HOST = "127.0.0.1"
+NUM_BARS = 11
+LEVELS_HISTORY = 22  # keep ~22 blocks for rolling window
 
 logging.basicConfig(
     level=logging.INFO,
@@ -42,7 +43,8 @@ state = {
     "status": "loading",
     "recording": False,
     "audio_chunks": [],
-    "active_model": DEFAULT_MODEL,
+    "active_model": "turbo",
+    "rms_history": [],
 }
 
 
@@ -64,6 +66,7 @@ def load_model(name=None):
         return True
     except Exception as e:
         log.error("Failed to load model '%s': %s", name, e)
+        # Fallback to previous model
         with lock:
             state["status"] = "idle"
         return False
@@ -73,7 +76,14 @@ def audio_callback(indata, frames, time_info, status):
     if status:
         log.warning("sounddevice: %s", status)
     if state["recording"]:
-        state["audio_chunks"].append(indata[:, 0].copy())
+        mono = indata[:, 0].copy()
+        state["audio_chunks"].append(mono)
+        # Compute RMS for this block
+        rms = float(np.sqrt(np.mean(mono ** 2)))
+        hist = state["rms_history"]
+        hist.append(rms)
+        if len(hist) > LEVELS_HISTORY:
+            del hist[:-LEVELS_HISTORY]
 
 
 audio_stream = sd.InputStream(
@@ -85,10 +95,17 @@ audio_stream = sd.InputStream(
 )
 
 
+PUNCTUATION_PROMPT = "Здравствуйте. Вот, что я хотел сказать: Hello, my name is Anton."
+
+
 def transcribe(audio):
     import mlx_whisper
     repo = MODELS[state["active_model"]]
-    result = mlx_whisper.transcribe(audio, path_or_hf_repo=repo)
+    result = mlx_whisper.transcribe(
+        audio,
+        path_or_hf_repo=repo,
+        initial_prompt=PUNCTUATION_PROMPT,
+    )
     return result.get("text", "").strip()
 
 
@@ -114,8 +131,30 @@ class Handler(BaseHTTPRequestHandler):
                 "active": state["active_model"],
                 "available": list(MODELS.keys()),
             })
+        elif self.path == "/levels":
+            self._get_levels()
         else:
             self.send_error(404)
+
+    def _get_levels(self):
+        hist = state["rms_history"]
+        if not hist:
+            self._respond({"levels": [0.0] * NUM_BARS})
+            return
+        # Take last NUM_BARS*2 values, pair them up for smoother bars
+        recent = hist[-(NUM_BARS * 2):]
+        bars = []
+        for i in range(NUM_BARS):
+            idx = int(i * len(recent) / NUM_BARS)
+            end = int((i + 1) * len(recent) / NUM_BARS)
+            chunk = recent[idx:end] if idx < len(recent) else [0.0]
+            if not chunk:
+                chunk = [0.0]
+            val = max(chunk)
+            # Normalize: typical speech RMS ~0.01-0.1, scale to 0-1
+            normalized = min(1.0, val * 15.0)
+            bars.append(round(normalized, 2))
+        self._respond({"levels": bars})
 
     def _switch_model(self):
         length = int(self.headers.get("Content-Length", 0))

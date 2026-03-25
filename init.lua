@@ -9,9 +9,11 @@ local PILL_BOTTOM_MARGIN = 60
 -- State
 local recording = false
 local busy = false
-
+local recordingStartTime = 0
+local MIN_RECORDING_SEC = 1.0
 -- Waveform pill (webview)
 local pill = nil
+local levelsTimer = nil
 
 local function getPillFrame()
     local screen = hs.screen.mainScreen():frame()
@@ -49,7 +51,38 @@ local function showPill(mode)
     end
 end
 
+local function stopLevelsPolling()
+    if levelsTimer then
+        levelsTimer:stop()
+        levelsTimer = nil
+    end
+end
+
+local function startLevelsPolling()
+    stopLevelsPolling()
+    levelsTimer = hs.timer.doEvery(0.1, function()
+        if not recording or not pill then
+            stopLevelsPolling()
+            return
+        end
+        hs.http.asyncGet(
+            DAEMON .. "/levels",
+            nil,
+            function(code, body)
+                if code == 200 and body and pill and recording then
+                    local ok, data = pcall(hs.json.decode, body)
+                    if ok and data and data.levels then
+                        local js = "setLevels([" .. table.concat(data.levels, ",") .. "])"
+                        pill:evaluateJavaScript(js)
+                    end
+                end
+            end
+        )
+    end)
+end
+
 local function hidePill()
+    stopLevelsPolling()
     if pill then pill:hide() end
 end
 
@@ -70,23 +103,22 @@ local function pasteText(text)
     end)
 end
 
--- Escape to cancel recording (only active while recording)
-escHotkey = hs.hotkey.new({}, "escape", function()
-    recording = false
-    busy = false
-    hidePill()
-    escHotkey:disable()
-    hs.http.asyncPost(DAEMON .. "/cancel", "", nil, function() end)
-end)
-
--- Cmd+F5 hotkey
-hs.hotkey.bind({"cmd"}, "F5", function()
+-- Toggle STT function
+local function toggleSTT()
     if busy then return end
-
     busy = true
 
-    -- Immediate visual feedback when stopping
+    -- If recording too short — cancel instead of transcribing
     if recording then
+        local elapsed = hs.timer.secondsSinceEpoch() - recordingStartTime
+        if elapsed < MIN_RECORDING_SEC then
+            recording = false
+            busy = false
+            escHotkey:disable()
+            hidePill()
+            hs.http.asyncPost(DAEMON .. "/cancel", "", nil, function() end)
+            return
+        end
         showPill("transcribing")
     end
 
@@ -111,9 +143,11 @@ hs.hotkey.bind({"cmd"}, "F5", function()
 
             if data.status == "recording" then
                 recording = true
+                recordingStartTime = hs.timer.secondsSinceEpoch()
                 busy = false
                 escHotkey:enable()
                 showPill("recording")
+                startLevelsPolling()
 
             elseif data.status == "done" then
                 recording = false
@@ -141,6 +175,20 @@ hs.hotkey.bind({"cmd"}, "F5", function()
             end
         end
     )
+end
+
+-- Cmd+F5 hotkey
+hs.hotkey.bind({"cmd"}, "F5", function()
+    toggleSTT()
+end)
+
+-- Escape to cancel recording (only active while recording)
+escHotkey = hs.hotkey.new({}, "escape", function()
+    recording = false
+    busy = false
+    hidePill()
+    escHotkey:disable()
+    hs.http.asyncPost(DAEMON .. "/cancel", "", nil, function() end)
 end)
 
 -- Menubar for model selection
@@ -185,6 +233,17 @@ menubar:setMenu(function()
         { title = "-" },
         { title = "Cmd+F5 to record", disabled = true },
     }
+end)
+
+-- Sync model state from daemon on startup
+hs.http.asyncGet(DAEMON .. "/status", nil, function(code, body)
+    if code == 200 and body then
+        local ok, data = pcall(hs.json.decode, body)
+        if ok and data and data.model then
+            activeModel = data.model
+            updateMenubar()
+        end
+    end
 end)
 
 updateMenubar()

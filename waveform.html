@@ -88,9 +88,25 @@
     <div class="bar"></div>
   </div>
   <script>
+    var bars = document.querySelectorAll('.bar');
+
     function setMode(mode) {
       var pill = document.getElementById('pill');
       pill.className = 'pill' + (mode === 'transcribing' ? ' transcribing' : '');
+      // Reset bars to CSS animation when not receiving live levels
+      if (mode !== 'recording') {
+        for (var i = 0; i < bars.length; i++) {
+          bars[i].style.transform = '';
+        }
+      }
+    }
+
+    function setLevels(levels) {
+      for (var i = 0; i < bars.length && i < levels.length; i++) {
+        var v = Math.max(0.15, levels[i]); // minimum visible height
+        bars[i].style.animation = 'none';
+        bars[i].style.transform = 'scaleY(' + v + ')';
+      }
     }
   </script>
 </body>

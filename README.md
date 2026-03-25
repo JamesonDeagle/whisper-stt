@@ -11,10 +11,12 @@ Replaces Apple Dictation with a faster, more accurate, fully offline alternative
 - **Fully local** — nothing is sent to the internet, all processing happens on your Mac
 - **Apple Silicon native** — runs on Metal GPU via Apple MLX framework
 - **Fast** — ~1 second transcription for typical speech with the turbo model
+- **Proper punctuation** — capitalization, commas, periods are always preserved
 - **Multi-language** — automatic language detection, handles mixed Russian/English, etc.
-- **Visual feedback** — animated waveform pill overlay while recording
+- **Live waveform** — animated waveform pill reacts to your voice in real-time
 - **Model switching** — choose between turbo (fast), medium, or large (best quality) from the menubar
 - **Auto-start** — daemon starts automatically on login via LaunchAgent
+- **Accidental press protection** — recordings shorter than 1 second are automatically cancelled
 
 ## How It Works
 
@@ -22,14 +24,15 @@ Replaces Apple Dictation with a faster, more accurate, fully offline alternative
 ┌────────────────────────┐      ┌──────────────────────────┐
 │   Hammerspoon (Lua)    │ HTTP │  Python STT Daemon       │
 │  • Cmd+F5 hotkey       │◄────►│  • mlx_whisper model     │
-│  • Waveform overlay    │      │  • sounddevice recording │
-│  • Clipboard paste     │      │  • Auto-start on login   │
+│  • Live waveform pill  │      │  • sounddevice recording │
+│  • Clipboard paste     │      │  • Real-time audio levels│
+│  • Model selector      │      │  • Auto-start on login   │
 └────────────────────────┘      └──────────────────────────┘
 ```
 
-1. Press **Cmd+F5** — recording starts, waveform pill appears at the bottom of the screen
+1. Press **Cmd+F5** — recording starts, waveform pill appears at the bottom of the screen with bars reacting to your voice
 2. Speak (any language)
-3. Press **Cmd+F5** again — recording stops, Whisper transcribes, text is pasted into the active app
+3. Press **Cmd+F5** again — pill switches to "processing" mode, Whisper transcribes, text is pasted into the active app
 4. Press **Escape** to cancel recording
 
 ## Requirements
@@ -55,7 +58,7 @@ The installer will:
 1. Install [Hammerspoon](https://www.hammerspoon.org/) (if not present)
 2. Create a Python virtual environment with `mlx-whisper` and `sounddevice`
 3. Download the Whisper Large V3 Turbo model (~1.5 GB)
-4. Set up Hammerspoon config with waveform overlay
+4. Set up Hammerspoon config with live waveform overlay
 5. Create and start a LaunchAgent for the daemon
 6. Disable VoiceOver Cmd+F5 shortcut
 
@@ -90,7 +93,7 @@ Switch models from the **W:turbo** menubar menu. Models are downloaded on first 
 | medium | 769M | ~1s | Good | 1.5 GB |
 | large | 1.5B | ~2-3s | Best | 3 GB |
 
-The turbo model is a distilled version of large-v3, offering 95-98% of its quality at 2-3x the speed.
+The turbo model is a distilled version of large-v3, offering 95-98% of its quality at 2-3x the speed. Recommended for most use cases.
 
 ## API
 
@@ -100,9 +103,10 @@ The daemon runs an HTTP server on `127.0.0.1:19876`:
 |----------|--------|-------------|
 | `/toggle` | POST | Start/stop recording. Returns `{"status": "done", "text": "..."}` on stop |
 | `/cancel` | POST | Cancel current recording |
-| `/status` | GET | Current state: `loading`, `idle`, `recording`, `transcribing` |
+| `/status` | GET | Current state: `loading`, `idle`, `recording`, `transcribing` + active model |
 | `/models` | GET | List available models |
 | `/model` | POST | Switch model: `{"model": "turbo"}` |
+| `/levels` | GET | Real-time audio levels for waveform visualization (11 bars, 0.0-1.0) |
 
 ## Uninstall
 
@@ -143,6 +147,10 @@ This removes the daemon, LaunchAgent, virtual environment, and Hammerspoon confi
 **No text appears after recording**
 - Make sure the cursor is in a text field
 - Check daemon logs for transcription results
+
+**No punctuation or capitalization**
+- The daemon uses `initial_prompt` to enforce punctuation style
+- If missing, restart the daemon — the prompt is applied on every transcription
 
 **Microphone permission**
 - On first run, macOS will ask for microphone permission for Python — allow it
