@@ -39,7 +39,9 @@ cd whisper-stt
 ./install.sh
 ```
 
-That's it. The installer handles everything: Hammerspoon, Python environment, model download, daemon setup.
+Or just double-click **Install.command** in Finder.
+
+The installer handles everything: Homebrew, Hammerspoon, Python environment, model download, daemon setup.
 
 After install:
 1. Allow Hammerspoon's Accessibility permission when macOS asks
