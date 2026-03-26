@@ -33,26 +33,24 @@ Murmur replaces Apple Dictation with OpenAI's Whisper running natively on Apple 
 
 ## Quick Start
 
-Open **Terminal** (Cmd+Space → type `Terminal` → Enter) and paste this single line:
+### Option 1: Download DMG (easiest)
+
+1. Download **[Murmur-Installer.dmg](https://github.com/JamesonDeagle/murmur/releases/latest)** from Releases
+2. Open the DMG, double-click **Install Murmur**
+3. If macOS blocks it: System Settings > Privacy & Security > click **Open Anyway**
+4. Wait ~5 minutes — everything installs automatically
+
+### Option 2: One-line terminal install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/JamesonDeagle/murmur/main/install.sh | bash
 ```
 
-Wait ~5 minutes. The installer does everything automatically.
+### After install
 
-After install:
 1. Allow Hammerspoon's Accessibility permission when macOS asks
 2. System Settings > Keyboard > Dictation > change Shortcut to "Off"
 3. Press **Option+Space** and start talking
-
-<details>
-<summary>Alternative: clone and install</summary>
-
-```bash
-git clone https://github.com/JamesonDeagle/murmur.git && cd murmur && ./install.sh
-```
-</details>
 
 ## Usage
 
