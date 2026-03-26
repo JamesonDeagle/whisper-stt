@@ -189,10 +189,48 @@ local function toggleSTT()
     )
 end
 
--- Cmd+F5 hotkey
-hs.hotkey.bind({"cmd"}, "F5", function()
-    toggleSTT()
-end)
+-- Config file for persistent hotkey settings
+local CONFIG_PATH = os.getenv("HOME") .. "/.whisper-stt/config.json"
+
+local function loadConfig()
+    local f = io.open(CONFIG_PATH, "r")
+    if not f then return { mods = {"cmd"}, key = "F5" } end
+    local raw = f:read("*a")
+    f:close()
+    local ok, data = pcall(hs.json.decode, raw)
+    if ok and data and data.key then return data end
+    return { mods = {"cmd"}, key = "F5" }
+end
+
+local function saveConfig(cfg)
+    os.execute("mkdir -p " .. os.getenv("HOME") .. "/.whisper-stt")
+    local f = io.open(CONFIG_PATH, "w")
+    if f then
+        f:write(hs.json.encode(cfg))
+        f:close()
+    end
+end
+
+local config = loadConfig()
+local mainHotkey = nil
+
+local function formatHotkey(cfg)
+    local parts = {}
+    for _, m in ipairs(cfg.mods or {}) do
+        table.insert(parts, m:sub(1,1):upper() .. m:sub(2))
+    end
+    table.insert(parts, cfg.key)
+    return table.concat(parts, "+")
+end
+
+local function bindMainHotkey(cfg)
+    if mainHotkey then mainHotkey:delete() end
+    mainHotkey = hs.hotkey.bind(cfg.mods, cfg.key, function()
+        toggleSTT()
+    end)
+end
+
+bindMainHotkey(config)
 
 -- Escape to cancel recording (only active while recording)
 escHotkey = hs.hotkey.new({}, "escape", function()
@@ -204,12 +242,42 @@ escHotkey = hs.hotkey.new({}, "escape", function()
     hs.http.asyncPost(DAEMON .. "/cancel", "", nil, function() end)
 end)
 
+-- Capture new hotkey from user
+local function captureHotkey(callback)
+    hs.alert.show("Press new hotkey...", 3)
+    local tap = hs.eventtap.new({hs.eventtap.event.types.keyDown}, function(event)
+        local flags = event:getFlags()
+        local key = hs.keycodes.map[event:getKeyCode()]
+        if not key then return true end
+
+        local mods = {}
+        if flags.cmd then table.insert(mods, "cmd") end
+        if flags.alt then table.insert(mods, "alt") end
+        if flags.ctrl then table.insert(mods, "ctrl") end
+        if flags.shift then table.insert(mods, "shift") end
+
+        callback({ mods = mods, key = key })
+        return true
+    end)
+    tap:start()
+    -- Auto-stop after first key
+    hs.timer.doAfter(5, function() tap:stop() end)
+    -- Stop after capture via callback wrapper
+    local origCallback = callback
+    callback = function(cfg) -- luacheck: ignore
+        tap:stop()
+        origCallback(cfg)
+    end
+end
+
 -- Menubar for model selection
 local menubar = hs.menubar.new()
 local activeModel = "turbo"
 
 local function updateMenubar()
-    menubar:setTitle("W:" .. activeModel)
+    local iconPath = os.getenv("HOME") .. "/.hammerspoon/icon.png"
+    menubar:setIcon(iconPath, true)
+    menubar:setTitle("")
 end
 
 local function switchModel(name)
@@ -237,27 +305,76 @@ end
 
 menubar:setMenu(function()
     return {
-        { title = "turbo (fast)", fn = function() switchModel("turbo") end,
-          checked = (activeModel == "turbo") },
-        { title = "medium", fn = function() switchModel("medium") end,
-          checked = (activeModel == "medium") },
-        { title = "large (best)", fn = function() switchModel("large") end,
-          checked = (activeModel == "large") },
+        { title = formatHotkey(config) .. " — record / stop", fn = function()
+            hs.alert.show("Press new hotkey...", 3)
+            local tap
+            tap = hs.eventtap.new({hs.eventtap.event.types.keyDown}, function(event)
+                local flags = event:getFlags()
+                local key = hs.keycodes.map[event:getKeyCode()]
+                if not key then return true end
+                local mods = {}
+                if flags.cmd then table.insert(mods, "cmd") end
+                if flags.alt then table.insert(mods, "alt") end
+                if flags.ctrl then table.insert(mods, "ctrl") end
+                if flags.shift then table.insert(mods, "shift") end
+                config = { mods = mods, key = key }
+                saveConfig(config)
+                bindMainHotkey(config)
+                tap:stop()
+                hs.alert.show("Hotkey: " .. formatHotkey(config), 1.5)
+                return true
+            end)
+            tap:start()
+            hs.timer.doAfter(5, function() if tap:isEnabled() then tap:stop(); hs.alert.show("Cancelled", 0.5) end end)
+        end },
+        { title = "Escape — cancel", disabled = true },
         { title = "-" },
-        { title = "Cmd+F5 to record", disabled = true },
+        { title = "Model", menu = {
+            { title = "turbo (fast)", fn = function() switchModel("turbo") end,
+              checked = (activeModel == "turbo") },
+            { title = "medium", fn = function() switchModel("medium") end,
+              checked = (activeModel == "medium") },
+            { title = "large (best)", fn = function() switchModel("large") end,
+              checked = (activeModel == "large") },
+        }},
+        { title = "-" },
+        { title = "Reload Config", fn = function() hs.reload() end },
+        { title = "Daemon Status", fn = function()
+            hs.http.asyncGet(DAEMON .. "/status", nil, function(code, body)
+                if code == 200 then
+                    hs.alert.show("Daemon: " .. body, 2)
+                else
+                    hs.alert.show("Daemon offline", 2)
+                end
+            end)
+        end },
     }
 end)
 
+-- Hide Hammerspoon's own menubar icon
+hs.dockicon.hide()
+if hs.menuIcon then hs.menuIcon(false) end
+
 -- Sync model state from daemon on startup
-hs.http.asyncGet(DAEMON .. "/status", nil, function(code, body)
-    if code == 200 and body then
-        local ok, data = pcall(hs.json.decode, body)
-        if ok and data and data.model then
-            activeModel = data.model
-            updateMenubar()
+local function syncDaemon()
+    hs.http.asyncGet(DAEMON .. "/status", nil, function(code, body)
+        if code == 200 and body then
+            local ok, data = pcall(hs.json.decode, body)
+            if ok and data and data.model then
+                activeModel = data.model
+                updateMenubar()
+            end
         end
-    end
-end)
+    end)
+end
 
 updateMenubar()
+syncDaemon()
+
+-- Pre-create pill webview so first Cmd+F5 is instant
+createPill()
+
+-- Warm up HTTP connection to daemon
+hs.http.asyncGet(DAEMON .. "/status", nil, function() end)
+
 hs.alert.show("Whisper STT loaded", 1)

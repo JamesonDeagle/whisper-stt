@@ -56,17 +56,25 @@ def load_model(name=None):
     with lock:
         state["status"] = "loading"
     import mlx_whisper
-    silence = np.zeros(SAMPLE_RATE, dtype=np.float32)
     try:
-        mlx_whisper.transcribe(silence, path_or_hf_repo=repo)
+        # Thorough warmup: transcribe different audio lengths to pre-compile
+        # all Metal shader variants. Without this, first real transcriptions
+        # are 10-15x slower as Metal JIT-compiles kernels on demand.
+        for duration_sec in [1, 3, 5]:
+            audio = np.zeros(SAMPLE_RATE * duration_sec, dtype=np.float32)
+            mlx_whisper.transcribe(
+                audio,
+                path_or_hf_repo=repo,
+                initial_prompt=PUNCTUATION_PROMPT,
+            )
+            log.info("Warmup %ds done", duration_sec)
         with lock:
             state["active_model"] = name
             state["status"] = "idle"
-        log.info("Model '%s' loaded", name)
+        log.info("Model '%s' fully warmed up", name)
         return True
     except Exception as e:
         log.error("Failed to load model '%s': %s", name, e)
-        # Fallback to previous model
         with lock:
             state["status"] = "idle"
         return False

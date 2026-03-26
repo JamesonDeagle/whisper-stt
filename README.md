@@ -4,36 +4,40 @@ Local speech-to-text for macOS using [OpenAI Whisper](https://github.com/openai/
 
 Replaces Apple Dictation with a faster, more accurate, fully offline alternative. Supports 100+ languages with automatic detection, handles mixed-language speech naturally.
 
-![Waveform indicator](https://img.shields.io/badge/macOS-Apple%20Silicon-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
 ## Features
 
-- **Fully local** — nothing is sent to the internet, all processing happens on your Mac
-- **Apple Silicon native** — runs on Metal GPU via Apple MLX framework
-- **Fast** — ~1 second transcription for typical speech with the turbo model
-- **Proper punctuation** — capitalization, commas, periods are always preserved
-- **Multi-language** — automatic language detection, handles mixed Russian/English, etc.
-- **Live waveform** — animated waveform pill reacts to your voice in real-time
-- **Model switching** — choose between turbo (fast), medium, or large (best quality) from the menubar
-- **Auto-start** — daemon starts automatically on login via LaunchAgent
-- **Accidental press protection** — recordings shorter than 1 second are automatically cancelled
+- **Fully local** — nothing is sent to the internet, all processing on your Mac
+- **Apple Silicon native** — Metal GPU via Apple MLX framework
+- **Fast** — ~1 second transcription with the turbo model
+- **Proper punctuation** — capitalization, commas, periods always preserved
+- **Multi-language** — auto-detection, handles mixed languages (e.g. Russian + English)
+- **Live waveform** — animated pill reacts to your voice in real-time
+- **Morphing loader** — pill smoothly transforms into a spinning loader during transcription
+- **Customizable hotkey** — change the trigger key from the menubar (persisted to config)
+- **Model switching** — turbo / medium / large from the menubar
+- **Menubar app** — single icon with all controls, no clutter
+- **Auto-start** — daemon launches on login via LaunchAgent
+- **Accidental press protection** — recordings < 1 second auto-cancel
+- **Instant startup** — pre-warmed webview and HTTP connections, no first-use lag
 
 ## How It Works
 
 ```
-┌────────────────────────┐      ┌──────────────────────────┐
-│   Hammerspoon (Lua)    │ HTTP │  Python STT Daemon       │
-│  • Cmd+F5 hotkey       │◄────►│  • mlx_whisper model     │
-│  • Live waveform pill  │      │  • sounddevice recording │
-│  • Clipboard paste     │      │  • Real-time audio levels│
-│  • Model selector      │      │  • Auto-start on login   │
-└────────────────────────┘      └──────────────────────────┘
+┌────────────────────────┐         ┌──────────────────────────┐
+│   Hammerspoon (Lua)    │  HTTP   │  Python STT Daemon       │
+│  • Customizable hotkey │◄───────►│  • mlx_whisper preloaded │
+│  • Live waveform pill  │ :19876  │  • sounddevice recording │
+│  • Morphing loader     │localhost│  • Real-time audio levels│
+│  • Menubar controls    │         │  • Auto-start on login   │
+└────────────────────────┘         └──────────────────────────┘
 ```
 
-1. Press **Cmd+F5** — recording starts, waveform pill appears at the bottom of the screen with bars reacting to your voice
-2. Speak (any language)
-3. Press **Cmd+F5** again — pill switches to "processing" mode, Whisper transcribes, text is pasted into the active app
-4. Press **Escape** to cancel recording
+1. Press **Cmd+F5** (or your custom hotkey) — recording starts, waveform pill appears at the bottom of the screen
+2. Speak (any language) — bars react to your voice in real-time
+3. Press **Cmd+F5** again — bars fade out, pill morphs into a spinning loader, Whisper transcribes, text is pasted
+4. Press **Escape** to cancel
 
 ## Requirements
 
@@ -52,13 +56,11 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Or double-click **install.sh** in Finder.
-
 The installer will:
 1. Install [Hammerspoon](https://www.hammerspoon.org/) (if not present)
 2. Create a Python virtual environment with `mlx-whisper` and `sounddevice`
 3. Download the Whisper Large V3 Turbo model (~1.5 GB)
-4. Set up Hammerspoon config with live waveform overlay
+4. Set up Hammerspoon config with waveform overlay and menubar icon
 5. Create and start a LaunchAgent for the daemon
 6. Disable VoiceOver Cmd+F5 shortcut
 
@@ -66,7 +68,7 @@ The installer will:
 
 1. **Hammerspoon** will ask for Accessibility permission — allow it in System Settings > Privacy & Security > Accessibility
 2. **Disable Apple Dictation shortcut**: System Settings > Keyboard > Dictation > change Shortcut to "Off" or "Press Control Twice"
-3. Click Hammerspoon menubar icon (hammer) > **Reload Config**
+3. Click the menubar icon > **Reload Config**
 
 ### Verify
 
@@ -77,15 +79,27 @@ curl http://127.0.0.1:19876/status
 
 ## Usage
 
-| Action | Key |
-|--------|-----|
+| Action | Default Key |
+|--------|-------------|
 | Start/stop recording | **Cmd+F5** |
 | Cancel recording | **Escape** |
-| Switch model | Menubar **W:turbo** > select |
+
+### Menubar Controls
+
+Click the waveform icon in the menubar:
+
+- **Change hotkey** — click the hotkey item, then press your new combo
+- **Model** — switch between turbo / medium / large
+- **Reload Config** — reload Hammerspoon config
+- **Daemon Status** — check if the daemon is running
+
+### Custom Hotkey
+
+Click the hotkey item in the menubar menu (e.g. "Cmd+F5 — record / stop"), then press your desired key combination. The new hotkey is saved to `~/.whisper-stt/config.json` and persists across restarts.
 
 ## Models
 
-Switch models from the **W:turbo** menubar menu. Models are downloaded on first use.
+Switch models from the menubar. Models are downloaded on first use.
 
 | Model | Parameters | Speed | Quality | Size |
 |-------|-----------|-------|---------|------|
@@ -93,20 +107,20 @@ Switch models from the **W:turbo** menubar menu. Models are downloaded on first 
 | medium | 769M | ~1s | Good | 1.5 GB |
 | large | 1.5B | ~2-3s | Best | 3 GB |
 
-The turbo model is a distilled version of large-v3, offering 95-98% of its quality at 2-3x the speed. Recommended for most use cases.
+The turbo model is a distilled version of large-v3 with 95-98% of its quality at 2-3x speed. Recommended for most use cases.
 
 ## API
 
-The daemon runs an HTTP server on `127.0.0.1:19876`:
+The daemon runs a local HTTP server on `127.0.0.1:19876`:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/toggle` | POST | Start/stop recording. Returns `{"status": "done", "text": "..."}` on stop |
 | `/cancel` | POST | Cancel current recording |
-| `/status` | GET | Current state: `loading`, `idle`, `recording`, `transcribing` + active model |
+| `/status` | GET | Current state + active model |
 | `/models` | GET | List available models |
 | `/model` | POST | Switch model: `{"model": "turbo"}` |
-| `/levels` | GET | Real-time audio levels for waveform visualization (11 bars, 0.0-1.0) |
+| `/levels` | GET | Real-time audio levels (11 bars, 0.0-1.0) |
 
 ## Uninstall
 
@@ -114,19 +128,22 @@ The daemon runs an HTTP server on `127.0.0.1:19876`:
 ./uninstall.sh
 ```
 
-This removes the daemon, LaunchAgent, virtual environment, and Hammerspoon config. Hammerspoon itself can be removed with `brew uninstall --cask hammerspoon`.
+Removes the daemon, LaunchAgent, virtual environment, and Hammerspoon config. Hammerspoon itself: `brew uninstall --cask hammerspoon`.
 
 ## Files
 
 ```
 ~/.whisper-stt/
 ├── whisper-stt-daemon.py    # Python daemon
+├── config.json              # Hotkey settings
 ├── venv/                    # Virtual environment
 └── logs/                    # Daemon logs
 
 ~/.hammerspoon/
-├── init.lua                 # Hotkey & overlay config
-└── waveform.html            # Animated waveform pill
+├── init.lua                 # Hotkey, overlay, menubar
+├── waveform.html            # Animated waveform + loader
+├── icon.png                 # Menubar icon (18x18)
+└── icon@2x.png              # Menubar icon (36x36 Retina)
 
 ~/Library/LaunchAgents/
 └── com.whisper.stt-daemon.plist
@@ -134,26 +151,25 @@ This removes the daemon, LaunchAgent, virtual environment, and Hammerspoon confi
 
 ## Troubleshooting
 
-**Cmd+F5 triggers VoiceOver or Apple Dictation**
+**Hotkey triggers VoiceOver or Apple Dictation**
 - System Settings > Keyboard > Dictation > set Shortcut to "Off"
 - System Settings > Accessibility > Voice Control > turn off
-- The installer disables VoiceOver's Cmd+F5 automatically
+- Or change the hotkey from the menubar to avoid conflicts
 
 **"STT daemon not running" alert**
-- Check if the daemon is running: `curl http://127.0.0.1:19876/status`
-- Check logs: `cat ~/.whisper-stt/logs/whisper-stt.err.log`
+- Check: `curl http://127.0.0.1:19876/status`
+- Logs: `cat ~/.whisper-stt/logs/whisper-stt.err.log`
 - Restart: `launchctl unload ~/Library/LaunchAgents/com.whisper.stt-daemon.plist && launchctl load ~/Library/LaunchAgents/com.whisper.stt-daemon.plist`
+
+**Slow first transcription after restart**
+- The daemon warms up Metal GPU shaders on start (~30 sec). Wait for warmup to complete before using.
 
 **No text appears after recording**
 - Make sure the cursor is in a text field
-- Check daemon logs for transcription results
-
-**No punctuation or capitalization**
-- The daemon uses `initial_prompt` to enforce punctuation style
-- If missing, restart the daemon — the prompt is applied on every transcription
+- Check daemon logs for transcription output
 
 **Microphone permission**
-- On first run, macOS will ask for microphone permission for Python — allow it
+- On first run, macOS will ask for mic permission for Python — allow it
 
 ## License
 
