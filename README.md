@@ -1,10 +1,20 @@
-# Murmur 🐱
+<p align="center">
+  <img src="Assets/icon-preview.png" width="180" alt="Murmur icon" />
+</p>
 
-Native macOS menubar app for speech-to-text. Runs **fully local** on Apple Silicon via [whisper.cpp](https://github.com/ggerganov/whisper.cpp) with Metal GPU acceleration. Single `.app` file, zero dependencies, drag-to-install.
+<h1 align="center">Murmur</h1>
 
-**Option+Space → speak → Option+Space → text pastes into any field.**
+<p align="center">
+  Native macOS menubar speech-to-text. Fully local on Apple Silicon.<br>
+  <b>Option+Space → speak → Option+Space → text pastes into any field.</b>
+</p>
 
-<img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+"> <img src="https://img.shields.io/badge/Apple_Silicon-M1%2FM2%2FM3%2FM4-green" alt="Apple Silicon"> <img src="https://img.shields.io/badge/UI-Liquid_Glass-purple" alt="Liquid Glass">
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Apple_Silicon-M1%2FM2%2FM3%2FM4-green" alt="Apple Silicon">
+  <img src="https://img.shields.io/badge/UI-Liquid_Glass-purple" alt="Liquid Glass">
+  <img src="https://img.shields.io/badge/whisper.cpp-Metal_GPU-orange" alt="whisper.cpp">
+</p>
 
 ## Features
 
